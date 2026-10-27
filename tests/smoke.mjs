@@ -34,6 +34,11 @@ check('screen_capture_monitor', Boolean(monitor.path) && monitor.width > 0, `${m
 const region = await call('screen_capture_region', { x: 20, y: 20, width: 200, height: 120 });
 check('screen_capture_region', Boolean(region.path) && region.width === 200, `${region.width}x${region.height}`);
 
+const started = Date.now();
+const delayed = await call('screen_capture_region', { x: 5, y: 5, width: 120, height: 90, delayMs: 400 });
+const elapsed = Date.now() - started;
+check('delayMs honoured', elapsed >= 380, `${elapsed} ms`);
+
 const target = windows.windows.find((window) => window.width > 100 && window.height > 100);
 if (target) {
   const byPid = await call('screen_capture_window', { pid: target.pid });

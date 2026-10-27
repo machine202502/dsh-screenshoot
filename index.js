@@ -54,6 +54,15 @@ export function apply(ctx, config = {}) {
     }
   };
 
+  /** Wait before the shot, so menus, animations or focus changes settle. */
+  const settle = async (delayMs) => {
+    const delay = Number(delayMs ?? 0);
+    if (!Number.isFinite(delay) || delay <= 0) return 0;
+    const capped = Math.min(Math.round(delay), 30000);
+    await new Promise((resolve) => setTimeout(resolve, capped));
+    return capped;
+  };
+
   const target = (explicit) => {
     const path = explicit && typeof explicit === 'string' && explicit.trim()
       ? explicit.trim()
@@ -117,6 +126,7 @@ export function apply(ctx, config = {}) {
     description: 'Capture one whole monitor to a PNG file. Pass the path to read_image to look at it.',
     parameters: obj({
       monitor: { type: 'number', description: 'Monitor index from screen_monitors (default 0)' },
+      delayMs: { type: 'number', description: 'Wait this many milliseconds before the shot (max 30000)' },
       out: { type: 'string', description: 'Output PNG path; a timestamped file is used when omitted' },
     }),
     output: {
@@ -130,9 +140,10 @@ export function apply(ctx, config = {}) {
     execute: async (args) => {
       const api = await backend();
       const shot = target(args.out);
+      const waited = await settle(args.delayMs);
       await api.captureMonitor({ index: Number(args.monitor ?? 0), shot });
       const size = pngSize(shot);
-      const label = `monitor ${args.monitor ?? 0} · ${size.width ?? '?'}×${size.height ?? '?'}`;
+      const label = `monitor ${args.monitor ?? 0} · ${size.width ?? '?'}×${size.height ?? '?'}${waited ? ` (+${waited} ms)` : ''}`;
       const frame = publish(shot, label).id;
       return { path: shot, ...size, label, ...(frame ? { frame } : {}) };
     },
@@ -146,6 +157,7 @@ export function apply(ctx, config = {}) {
       y: { type: 'number' },
       width: { type: 'number' },
       height: { type: 'number' },
+      delayMs: { type: 'number', description: 'Wait this many milliseconds before the shot (max 30000)' },
       out: { type: 'string' },
     }, ['x', 'y', 'width', 'height']),
     output: {
@@ -164,9 +176,10 @@ export function apply(ctx, config = {}) {
       }
       const api = await backend();
       const shot = target(args.out);
+      const waited = await settle(args.delayMs);
       await api.captureRegion({ x: Number(args.x), y: Number(args.y), width, height, shot });
       const size = pngSize(shot);
-      const label = `region ${size.width ?? width}×${size.height ?? height} at ${args.x},${args.y}`;
+      const label = `region ${size.width ?? width}×${size.height ?? height} at ${args.x},${args.y}${waited ? ` (+${waited} ms)` : ''}`;
       const frame = publish(shot, label).id;
       return { path: shot, ...size, label, ...(frame ? { frame } : {}) };
     },
@@ -179,6 +192,7 @@ export function apply(ctx, config = {}) {
       pid: { type: 'number', description: 'Process id owning the window' },
       title: { type: 'string', description: 'Substring of the window title' },
       id: { type: 'string', description: 'Window handle from screen_windows (numeric or hex)' },
+      delayMs: { type: 'number', description: 'Wait this many milliseconds before the shot (max 30000)' },
       out: { type: 'string' },
     }),
     output: {
@@ -207,12 +221,13 @@ export function apply(ctx, config = {}) {
           : String(args.id).trim();
       const api = await backend();
       const shot = target(args.out);
+      const waited = await settle(args.delayMs);
       const result = await api.captureWindow({ pid, title: args.title, id, shot });
       const window = (pid || args.title) && !id
         ? (await api.listWindows({ pid, title: args.title }))[0]
         : undefined;
       const size = pngSize(shot);
-      const label = `${window?.title ?? 'window'} · ${size.width ?? '?'}×${size.height ?? '?'}`;
+      const label = `${window?.title ?? 'window'} · ${size.width ?? '?'}×${size.height ?? '?'}${waited ? ` (+${waited} ms)` : ''}`;
       const frame = publish(shot, label).id;
       return { path: shot, ...size, label, ...(window ? { window } : {}), ...(frame ? { frame } : {}) };
     },
