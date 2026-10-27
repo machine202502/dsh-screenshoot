@@ -223,9 +223,13 @@ export function apply(ctx, config = {}) {
       const shot = target(args.out);
       const waited = await settle(args.delayMs);
       const result = await api.captureWindow({ pid, title: args.title, id, shot });
-      const window = (pid || args.title) && !id
+      // Fetch the window record for the label: by pid/title, or by handle.
+      let window = (pid || args.title) && !id
         ? (await api.listWindows({ pid, title: args.title }))[0]
         : undefined;
+      if (!window && id) {
+        window = (await api.listWindows({})).find((entry) => String(entry.id) === String(id));
+      }
       const size = pngSize(shot);
       const label = `${window?.title ?? 'window'} · ${size.width ?? '?'}×${size.height ?? '?'}${waited ? ` (+${waited} ms)` : ''}`;
       const frame = publish(shot, label).id;

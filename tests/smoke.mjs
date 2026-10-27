@@ -46,6 +46,10 @@ if (target) {
 
   const byTitle = await call('screen_capture_window', { title: target.title.slice(0, 8) });
   check('screen_capture_window by title', Boolean(byTitle.path), `${byTitle.width}x${byTitle.height}`);
+
+  const hexId = `0x${Number(target.id).toString(16)}`;
+  const byId = await call('screen_capture_window', { id: hexId });
+  check('screen_capture_window by hex id', Boolean(byId.path), `${hexId} → ${byId.label ?? ''}`);
 }
 
 for (const dispose of disposers) dispose();
