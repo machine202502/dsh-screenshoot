@@ -61,6 +61,20 @@ if (target) {
   const byTitle = await call('screen_capture_window', { title: target.title.slice(0, 8) });
   check('screen_capture_window by title', Boolean(byTitle.path), `${byTitle.width}x${byTitle.height}`);
 
+  const cropped = await call('screen_capture_window', {
+    pid: target.pid,
+    crop: { x: 100, y: 80, width: 320, height: 200 },
+  });
+  check('crop inside the window', cropped.width === 320 && cropped.height === 200, `${cropped.width}x${cropped.height} ${cropped.label ?? ''}`);
+
+  let cropError = null;
+  try {
+    await call('screen_capture_window', { pid: target.pid, crop: { x: 0, y: 0, width: 99999, height: 200 } });
+  } catch (error) {
+    cropError = error.message;
+  }
+  check('crop outside the window fails', Boolean(cropError && /does not fit/.test(cropError)), cropError ?? 'no error');
+
   const hexId = `0x${Number(target.id).toString(16)}`;
   const byId = await call('screen_capture_window', { id: hexId });
   check('screen_capture_window by hex id', Boolean(byId.path), `${hexId} → ${byId.label ?? ''}`);

@@ -1,7 +1,8 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { defaultShotsDir, ensureDir, stamp } from './src/util.js';
 import { createFrameServer } from './src/frames.js';
+import { cropPng } from './src/png.js';
 
 export const inject = ['tools'];
 
@@ -249,6 +250,18 @@ export function apply(ctx, config = {}) {
       title: { type: 'string', description: 'Substring of the window title' },
       id: { type: 'string', description: 'Window handle from screen_windows (numeric or hex)' },
       delayMs: { type: 'number', description: 'Wait this many milliseconds before the shot (max 30000)' },
+      crop: {
+        type: 'object',
+        additionalProperties: false,
+        description: 'Cut this rectangle out of the window, relative to its top-left corner',
+        properties: {
+          x: { type: 'number' },
+          y: { type: 'number' },
+          width: { type: 'number' },
+          height: { type: 'number' },
+        },
+        required: ['width', 'height'],
+      },
       out: { type: 'string' },
     }),
     output: {
@@ -286,8 +299,30 @@ export function apply(ctx, config = {}) {
       if (!window && id) {
         window = (await api.listWindows({})).find((entry) => String(entry.id) === String(id));
       }
-      const size = pngSize(shot);
-      const label = `${window?.title ?? 'window'} · ${size.width ?? '?'}×${size.height ?? '?'}${waited ? ` (+${waited} ms)` : ''}`;
+      let size = pngSize(shot);
+      let cropLabel = '';
+      if (args.crop) {
+        const cropX = Number(args.crop.x ?? 0);
+        const cropY = Number(args.crop.y ?? 0);
+        const cropWidth = Number(args.crop.width);
+        const cropHeight = Number(args.crop.height);
+        if (![cropX, cropY, cropWidth, cropHeight].every(Number.isFinite) || cropWidth < 1 || cropHeight < 1) {
+          throw new Error('crop needs numeric width and height greater than zero');
+        }
+        if (cropX < 0 || cropY < 0 || cropX + cropWidth > size.width || cropY + cropHeight > size.height) {
+          throw new Error(
+            `crop ${cropWidth}x${cropHeight} at ${cropX},${cropY} does not fit the window image (${size.width}x${size.height})`,
+          );
+        }
+        const source = readFileSync(shot);
+        const cropped = cropPng(source, { x: cropX, y: cropY, width: cropWidth, height: cropHeight });
+        writeFileSync(shot, cropped.buffer);
+        size = { width: cropped.width, height: cropped.height };
+        cropLabel = ` · crop ${cropped.width}×${cropped.height} at ${cropX},${cropY}`;
+      }
+      const label = `${window?.title ?? 'window'} · ${size.width ?? '?'}×${size.height ?? '?'}`
+        + cropLabel
+        + (waited ? ` (+${waited} ms)` : '');
       const frame = publish(shot, label).id;
       return { path: shot, ...size, label, ...(window ? { window } : {}), ...(frame ? { frame } : {}) };
     },
