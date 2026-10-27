@@ -54,6 +54,21 @@ export function apply(ctx, config = {}) {
     }
   };
 
+  // The union of all monitors, so a region can be clamped to what exists.
+  let boundsCache = { at: 0, value: null };
+  const virtualBounds = async (api) => {
+    if (Date.now() - boundsCache.at < 5000 && boundsCache.value) return boundsCache.value;
+    const monitors = await api.listMonitors();
+    if (!monitors.length) return null;
+    const left = Math.min(...monitors.map((monitor) => monitor.x));
+    const top = Math.min(...monitors.map((monitor) => monitor.y));
+    const right = Math.max(...monitors.map((monitor) => monitor.x + monitor.width));
+    const bottom = Math.max(...monitors.map((monitor) => monitor.y + monitor.height));
+    const value = { x: left, y: top, width: right - left, height: bottom - top };
+    boundsCache = { at: Date.now(), value };
+    return value;
+  };
+
   /** Wait before the shot, so menus, animations or focus changes settle. */
   const settle = async (delayMs) => {
     const delay = Number(delayMs ?? 0);
@@ -130,7 +145,13 @@ export function apply(ctx, config = {}) {
       out: { type: 'string', description: 'Output PNG path; a timestamped file is used when omitted' },
     }),
     output: {
-      schema: obj({ path: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, frame: { type: 'string' }, label: { type: 'string' } }, ['path']),
+      schema: obj({
+        path: { type: 'string' },
+        width: { type: 'number' },
+        height: { type: 'number' },
+        frame: { type: 'string' },
+        label: { type: 'string' },
+      }, ['path']),
       render: (_args, value) => [{
         type: 'text',
         text: `monitor ${value.width ?? '?'}×${value.height ?? '?'} → ${value.path}${value.frame ? ` [shot:${value.frame}]${value.label ?? ''}` : ''}`,
@@ -161,7 +182,14 @@ export function apply(ctx, config = {}) {
       out: { type: 'string' },
     }, ['x', 'y', 'width', 'height']),
     output: {
-      schema: obj({ path: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, frame: { type: 'string' }, label: { type: 'string' } }, ['path']),
+      schema: obj({
+        path: { type: 'string' },
+        width: { type: 'number' },
+        height: { type: 'number' },
+        frame: { type: 'string' },
+        label: { type: 'string' },
+        clamped: { type: 'boolean' },
+      }, ['path']),
       render: (_args, value) => [{
         type: 'text',
         text: `region ${value.width ?? '?'}×${value.height ?? '?'} → ${value.path}${value.frame ? ` [shot:${value.frame}]${value.label ?? ''}` : ''}`,
@@ -174,14 +202,42 @@ export function apply(ctx, config = {}) {
       if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) {
         throw new Error('width and height must be positive numbers');
       }
+      if (!Number.isFinite(Number(args.x)) || !Number.isFinite(Number(args.y))) {
+        throw new Error('x and y must be numbers');
+      }
       const api = await backend();
+      let x = Math.round(Number(args.x));
+      let y = Math.round(Number(args.y));
+      let keepWidth = Math.round(width);
+      let keepHeight = Math.round(height);
+      let clamped = false;
+      const bounds = await virtualBounds(api);
+      if (bounds) {
+        const left = Math.max(x, bounds.x);
+        const top = Math.max(y, bounds.y);
+        const right = Math.min(x + keepWidth, bounds.x + bounds.width);
+        const bottom = Math.min(y + keepHeight, bounds.y + bounds.height);
+        if (right - left < 1 || bottom - top < 1) {
+          throw new Error(
+            `region ${keepWidth}x${keepHeight} at ${x},${y} is outside the screen `
+            + `(virtual desktop ${bounds.width}x${bounds.height} at ${bounds.x},${bounds.y})`,
+          );
+        }
+        clamped = left !== x || top !== y || right - left !== keepWidth || bottom - top !== keepHeight;
+        x = left;
+        y = top;
+        keepWidth = right - left;
+        keepHeight = bottom - top;
+      }
       const shot = target(args.out);
       const waited = await settle(args.delayMs);
-      await api.captureRegion({ x: Number(args.x), y: Number(args.y), width, height, shot });
+      await api.captureRegion({ x, y, width: keepWidth, height: keepHeight, shot });
       const size = pngSize(shot);
-      const label = `region ${size.width ?? width}×${size.height ?? height} at ${args.x},${args.y}${waited ? ` (+${waited} ms)` : ''}`;
+      const label = `region ${size.width ?? keepWidth}×${size.height ?? keepHeight} at ${x},${y}`
+        + (clamped ? ' · clamped' : '')
+        + (waited ? ` (+${waited} ms)` : '');
       const frame = publish(shot, label).id;
-      return { path: shot, ...size, label, ...(frame ? { frame } : {}) };
+      return { path: shot, ...size, label, clamped, ...(frame ? { frame } : {}) };
     },
   });
 

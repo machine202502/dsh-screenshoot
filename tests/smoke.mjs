@@ -39,6 +39,20 @@ const delayed = await call('screen_capture_region', { x: 5, y: 5, width: 120, he
 const elapsed = Date.now() - started;
 check('delayMs honoured', elapsed >= 380, `${elapsed} ms`);
 
+const clipped = await call('screen_capture_region', { x: -50, y: -50, width: 200, height: 200 });
+check('clamped region', clipped.clamped === true && clipped.width === 150, `${clipped.width}x${clipped.height}, clamped=${clipped.clamped}`);
+
+const oversized = await call('screen_capture_region', { x: 0, y: 0, width: 4000, height: 300 });
+check('oversized region clamped', oversized.clamped === true && oversized.width <= 4000, `${oversized.width} wide`);
+
+let outside = null;
+try {
+  await call('screen_capture_region', { x: 9000, y: 9000, width: 100, height: 100 });
+} catch (error) {
+  outside = error.message;
+}
+check('region outside the screen fails', Boolean(outside && /outside the screen/.test(outside)), outside ?? 'no error');
+
 const target = windows.windows.find((window) => window.width > 100 && window.height > 100);
 if (target) {
   const byPid = await call('screen_capture_window', { pid: target.pid });
