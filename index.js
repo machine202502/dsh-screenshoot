@@ -199,10 +199,16 @@ export function apply(ctx, config = {}) {
     execute: async (args) => {
       const pid = args.pid === undefined ? undefined : Number(args.pid);
       if (pid === undefined && !args.title && !args.id) throw new Error('pass pid, title or id');
+      // Window handles come as decimal from the list, but a user may paste hex.
+      const id = args.id === undefined
+        ? undefined
+        : String(args.id).trim().toLowerCase().startsWith('0x')
+          ? String(parseInt(String(args.id), 16))
+          : String(args.id).trim();
       const api = await backend();
       const shot = target(args.out);
-      const result = await api.captureWindow({ pid, title: args.title, id: args.id, shot });
-      const window = (pid || args.title) && !args.id
+      const result = await api.captureWindow({ pid, title: args.title, id, shot });
+      const window = (pid || args.title) && !id
         ? (await api.listWindows({ pid, title: args.title }))[0]
         : undefined;
       const size = pngSize(shot);
