@@ -50,6 +50,8 @@ public class HsbWin {
   [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
   [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out RECT value, int size);
   [DllImport("gdi32.dll")] public static extern bool BitBlt(IntPtr hdcDest, int x, int y, int width, int height, IntPtr hdcSrc, int srcX, int srcY, int rop);
+  [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern uint GetDpiForSystem();
   [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
 
@@ -163,7 +165,17 @@ function Capture-Window([long]$handle, $path) {
   $height = $rect.Bottom - $rect.Top
   if ($width -le 0 -or $height -le 0) { throw "window $handle has no drawable area (${width}x${height})" }
 
-  $bitmap = New-Object System.Drawing.Bitmap $width, $height
+  # A window that is not DPI aware renders its client at 96 dpi, so a physical
+  # size bitmap would be mostly blank; size it by the window's own dpi.
+  $windowDpi = [HsbWin]::GetDpiForWindow($hwnd)
+  $systemDpi = [HsbWin]::GetDpiForSystem()
+  if ($windowDpi -le 0) { $windowDpi = 96 }
+  if ($systemDpi -le 0) { $systemDpi = 96 }
+  $scale = [math]::Min(1.0, [double]$windowDpi / [double]$systemDpi)
+  $bitmapWidth = [int][math]::Max(1, [math]::Round($width * $scale))
+  $bitmapHeight = [int][math]::Max(1, [math]::Round($height * $scale))
+
+  $bitmap = New-Object System.Drawing.Bitmap $bitmapWidth, $bitmapHeight
   $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
   $hdc = $graphics.GetHdc()
   # PW_RENDERFULLCONTENT = 2: renders DirectComposition content, so an occluded window still appears.
@@ -197,8 +209,8 @@ function Capture-Window([long]$handle, $path) {
   $total = 0
   for ($gy = 0; $gy -lt $grid; $gy++) {
     for ($gx = 0; $gx -lt $grid; $gx++) {
-      $sx = [int][math]::Floor(($width - 1) * (0.1 + 0.8 * $gx / ($grid - 1)))
-      $sy = [int][math]::Floor(($height - 1) * (0.1 + 0.8 * $gy / ($grid - 1)))
+      $sx = [int][math]::Floor(($bitmapWidth - 1) * (0.1 + 0.8 * $gx / ($grid - 1)))
+      $sy = [int][math]::Floor(($bitmapHeight - 1) * (0.1 + 0.8 * $gy / ($grid - 1)))
       $pixel = $bitmap.GetPixel($sx, $sy)
       $total++
       if ($pixel.R -lt 16 -and $pixel.G -lt 16 -and $pixel.B -lt 16) { $dark++ }
@@ -210,7 +222,11 @@ function Capture-Window([long]$handle, $path) {
   }
 
   Save-Bitmap $bitmap $path
-  return [ordered]@{ path = $path; handle = $handle; x = $rect.Left; y = $rect.Top; width = $width; height = $height }
+  return [ordered]@{
+    path = $path; handle = $handle; x = $rect.Left; y = $rect.Top;
+    width = $bitmapWidth; height = $bitmapHeight;
+    windowWidth = $width; windowHeight = $height; scale = $scale
+  }
 }
 
 switch ($Action) {
