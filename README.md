@@ -1,0 +1,106 @@
+# hsb-screenshoot
+
+DSH-плагин для снимков экрана и окон. Кроссплатформенный: Windows, macOS, Linux (X11).
+
+Главное отличие от обычного «скриншота экрана»: окно снимается **по своим пикселям**, поэтому
+снимок получается, даже если окно за другим окном, свёрнуто в фоне или не в фокусе. Кино на
+переднем плане и приложение агента за ним — не помеха.
+
+## Инструменты
+
+| Инструмент | Что делает |
+|---|---|
+| `screen_monitors` | список мониторов: позиция, размер, масштаб, основность |
+| `screen_windows` | видимые окна: id, pid, заголовок, процесс, позиция, размер |
+| `screen_capture_monitor` | снимок целого монитора |
+| `screen_capture_region` | снимок прямоугольной области |
+| `screen_capture_window` | снимок окна по `pid`, `title` или `id` |
+
+Все снимки сохраняются в PNG, путь возвращается в результате — его можно открыть
+инструментом `read_image`, чтобы посмотреть на картинку.
+
+## Снимки в чате
+
+Как в Browser: после снимка в строке инструмента появляется миниатюра. Хост поднимает
+локальный сервер кадров на `127.0.0.1:49231`, инструмент возвращает маркер `[shot:<id>]`,
+а клиент рисует по нему `<img>`. В памяти держатся последние 24 кадра, файлы остаются на диске.
+
+Клик по миниатюре открывает PNG в новой вкладке.
+
+## Как это работает по платформам
+
+**Windows** — PowerShell + Win32:
+
+- `EnumWindows` + `DwmGetWindowAttribute` — список окон и точные границы;
+- `PrintWindow(PW_RENDERFULLCONTENT)` — отрисовка окна в bitmap, не копирование экрана;
+  именно поэтому снимается и перекрытое окно;
+- `Graphics.CopyFromScreen` — монитор и область;
+- per-monitor DPI awareness — координаты и размеры в физических пикселях (важно на 200 %).
+- Заголовки окон передаются в base64, а stdout принудительно UTF-8 — иначе кириллица ломается.
+
+**macOS** — `screencapture` + JavaScript for Automation:
+
+- `NSScreen` — мониторы;
+- `CGWindowListCopyWindowInfo` — окна и их границы;
+- `screencapture -l <window id>` — окно, даже перекрытое; `-R` — область; `-D` — монитор.
+
+Нужно разрешение **Screen Recording** (Системные настройки → Конфиденциальность). Без него
+macOS отдаст только обои.
+
+**Linux (X11)** — `xrandr`, `wmctrl`, ImageMagick `import`:
+
+- `xrandr --query` — мониторы;
+- `wmctrl -lGpx` — окна, pid и геометрия;
+- `import -window <id>` — окно из его собственного буфера; `-window root -crop` — область.
+
+На Wayland X11-инструменты не видят окна: плагин честно скажет, чего не хватает, вместо
+чёрного снимка. Для Wayland нужен portal/grim-подход.
+
+## Установка
+
+```bash
+npx --yes github:machine202502/hsb-screenshoot
+```
+
+или вручную: добавить в `~/.dsh/profiles/desktop/package.json`
+
+```json
+{
+  "dependencies": { "hsb-screenshoot": "github:machine202502/hsb-screenshoot" },
+  "dsh": { "profile": { "bundles": ["…", "hsb-screenshoot"] } }
+}
+```
+
+и перезапустить DSH. Плагин не тянет npm-зависимостей — только системные средства платформы.
+
+## Примеры
+
+```text
+screen_monitors
+→ 0* 3200x2000 at 0,0
+
+screen_windows { title: "Brave" }
+→ 132518  pid 9800  3200x1904 at 0,0  machine202502/hsb-browser – Brave
+
+screen_capture_window { title: "Brave" }
+→ путь к PNG 3200x1904 (окно было за DSH)
+
+screen_capture_region { x: 100, y: 100, width: 800, height: 500 }
+screen_capture_monitor { monitor: 0 }
+```
+
+## Требования
+
+| Платформа | Что нужно |
+|---|---|
+| Windows | PowerShell 5.1+ (есть по умолчанию), .NET Framework |
+| macOS | разрешение Screen Recording |
+| Linux X11 | `xrandr`, `wmctrl`, ImageMagick (`import`) |
+| Linux Wayland | `grim`, `wlr-randr` (только монитор/область) |
+
+## Проверка
+
+```bash
+node tests/probe.mjs   # бэкенд платформы напрямую
+node tests/smoke.mjs   # инструменты через index.js
+```

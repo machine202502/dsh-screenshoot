@@ -1,0 +1,6 @@
+- insert:
+    - id: screenshoot
+      name: 'hsb-screenshoot'
+      config:
+        outDir: null
+        bridgePort: 49231

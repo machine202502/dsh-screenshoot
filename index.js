@@ -1,0 +1,214 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { defaultShotsDir, ensureDir, stamp } from './src/util.js';
+import { createFrameServer } from './src/frames.js';
+
+export const inject = ['tools'];
+
+const backends = {
+  win32: () => import('./src/win32.js'),
+  darwin: () => import('./src/darwin.js'),
+  linux: () => import('./src/linux.js'),
+};
+
+const backend = async () => {
+  const loader = backends[process.platform];
+  if (!loader) throw new Error(`unsupported platform: ${process.platform}`);
+  return loader();
+};
+
+/** PNG size from the IHDR chunk, so every tool reports the real picture size. */
+const pngSize = (path) => {
+  try {
+    const buffer = readFileSync(path);
+    if (buffer.length < 24) return {};
+    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+  } catch {
+    return {};
+  }
+};
+
+const obj = (properties = {}, required = []) => ({
+  type: 'object',
+  additionalProperties: false,
+  ...(required.length ? { required } : {}),
+  properties,
+});
+
+export function apply(ctx, config = {}) {
+  const outDir = config.outDir ?? defaultShotsDir();
+  const frames = createFrameServer({ port: config.bridgePort ?? 49231 });
+
+  ctx.effect(() => {
+    frames.listen().catch(() => {});
+    return () => frames.close();
+  });
+
+  /** Store the PNG for the chat thumbnail and return the marker payload. */
+  const publish = (shot, caption) => {
+    try {
+      const id = frames.put(readFileSync(shot), { path: shot, caption });
+      return { id, suffix: `[shot:${id}]${caption}` };
+    } catch {
+      return { id: null, suffix: caption };
+    }
+  };
+
+  const target = (explicit) => {
+    const path = explicit && typeof explicit === 'string' && explicit.trim()
+      ? explicit.trim()
+      : join(ensureDir(outDir), `shot-${stamp()}.png`);
+    return path;
+  };
+
+  const tool = (definition) => ctx.tools.register(definition);
+
+  tool({
+    name: 'screen_monitors',
+    description: 'List monitors with their position, size and scale, in physical pixels.',
+    parameters: obj(),
+    output: {
+      schema: obj({ monitors: { type: 'array', items: { type: 'object', additionalProperties: true } } }, ['monitors']),
+      render: (_args, value) => [{
+        type: 'text',
+        text: value.monitors
+          .map((monitor) => `${monitor.index}${monitor.primary ? '*' : ' '} ${monitor.width}x${monitor.height} at ${monitor.x},${monitor.y}${monitor.scaleFactor ? ` @${monitor.scaleFactor}x` : ''}`)
+          .join('\n') || 'no monitors reported',
+      }],
+    },
+    isConcurrencySafe: () => true,
+    execute: async () => {
+      const api = await backend();
+      return { monitors: await api.listMonitors() };
+    },
+  });
+
+  tool({
+    name: 'screen_windows',
+    description: 'List visible top-level windows with pid, title and bounds. Covers occluded windows too.',
+    parameters: obj({
+      pid: { type: 'number', description: 'Only windows of this process' },
+      title: { type: 'string', description: 'Only windows whose title contains this text' },
+      limit: { type: 'number', description: 'Maximum rows (default 100)' },
+    }),
+    output: {
+      schema: obj({
+        windows: { type: 'array', items: { type: 'object', additionalProperties: true } },
+        total: { type: 'number' },
+      }, ['windows']),
+      render: (_args, value) => [{
+        type: 'text',
+        text: value.windows.length
+          ? value.windows.map((window) => `${window.id}  pid ${window.pid}  ${window.width}x${window.height} at ${window.x},${window.y}  ${window.title}`).join('\n')
+          : 'no windows matched',
+      }],
+    },
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const api = await backend();
+      const windows = await api.listWindows({ pid: args.pid, title: args.title });
+      const limit = Number(args.limit ?? 100);
+      return { total: windows.length, windows: windows.slice(0, limit) };
+    },
+  });
+
+  tool({
+    name: 'screen_capture_monitor',
+    description: 'Capture one whole monitor to a PNG file. Pass the path to read_image to look at it.',
+    parameters: obj({
+      monitor: { type: 'number', description: 'Monitor index from screen_monitors (default 0)' },
+      out: { type: 'string', description: 'Output PNG path; a timestamped file is used when omitted' },
+    }),
+    output: {
+      schema: obj({ path: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, frame: { type: 'string' }, label: { type: 'string' } }, ['path']),
+      render: (_args, value) => [{
+        type: 'text',
+        text: `monitor ${value.width ?? '?'}×${value.height ?? '?'} → ${value.path}${value.frame ? ` [shot:${value.frame}]${value.label ?? ''}` : ''}`,
+      }],
+    },
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const api = await backend();
+      const shot = target(args.out);
+      await api.captureMonitor({ index: Number(args.monitor ?? 0), shot });
+      const size = pngSize(shot);
+      const label = `monitor ${args.monitor ?? 0} · ${size.width ?? '?'}×${size.height ?? '?'}`;
+      const frame = publish(shot, label).id;
+      return { path: shot, ...size, label, ...(frame ? { frame } : {}) };
+    },
+  });
+
+  tool({
+    name: 'screen_capture_region',
+    description: 'Capture a rectangle of the screen (virtual-desktop pixels) to a PNG file.',
+    parameters: obj({
+      x: { type: 'number' },
+      y: { type: 'number' },
+      width: { type: 'number' },
+      height: { type: 'number' },
+      out: { type: 'string' },
+    }, ['x', 'y', 'width', 'height']),
+    output: {
+      schema: obj({ path: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, frame: { type: 'string' }, label: { type: 'string' } }, ['path']),
+      render: (_args, value) => [{
+        type: 'text',
+        text: `region ${value.width ?? '?'}×${value.height ?? '?'} → ${value.path}${value.frame ? ` [shot:${value.frame}]${value.label ?? ''}` : ''}`,
+      }],
+    },
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const width = Number(args.width);
+      const height = Number(args.height);
+      if (!Number.isFinite(width) || !Number.isFinite(height) || width < 1 || height < 1) {
+        throw new Error('width and height must be positive numbers');
+      }
+      const api = await backend();
+      const shot = target(args.out);
+      await api.captureRegion({ x: Number(args.x), y: Number(args.y), width, height, shot });
+      const size = pngSize(shot);
+      const label = `region ${size.width ?? width}×${size.height ?? height} at ${args.x},${args.y}`;
+      const frame = publish(shot, label).id;
+      return { path: shot, ...size, label, ...(frame ? { frame } : {}) };
+    },
+  });
+
+  tool({
+    name: 'screen_capture_window',
+    description: 'Capture one window by pid, title or window id — including a window that is behind others or unfocused.',
+    parameters: obj({
+      pid: { type: 'number', description: 'Process id owning the window' },
+      title: { type: 'string', description: 'Substring of the window title' },
+      id: { type: 'string', description: 'Window handle from screen_windows (numeric or hex)' },
+      out: { type: 'string' },
+    }),
+    output: {
+      schema: obj({
+        path: { type: 'string' },
+        width: { type: 'number' },
+        height: { type: 'number' },
+        window: { type: 'object', additionalProperties: true },
+        frame: { type: 'string' },
+        label: { type: 'string' },
+      }, ['path']),
+      render: (_args, value) => [{
+        type: 'text',
+        text: `window ${value.width ?? '?'}×${value.height ?? '?'} → ${value.path}${value.frame ? ` [shot:${value.frame}]${value.label ?? ''}` : ''}`,
+      }],
+    },
+    isConcurrencySafe: () => true,
+    execute: async (args) => {
+      const pid = args.pid === undefined ? undefined : Number(args.pid);
+      if (pid === undefined && !args.title && !args.id) throw new Error('pass pid, title or id');
+      const api = await backend();
+      const shot = target(args.out);
+      const result = await api.captureWindow({ pid, title: args.title, id: args.id, shot });
+      const window = (pid || args.title) && !args.id
+        ? (await api.listWindows({ pid, title: args.title }))[0]
+        : undefined;
+      const size = pngSize(shot);
+      const label = `${window?.title ?? 'window'} · ${size.width ?? '?'}×${size.height ?? '?'}`;
+      const frame = publish(shot, label).id;
+      return { path: shot, ...size, label, ...(window ? { window } : {}), ...(frame ? { frame } : {}) };
+    },
+  });
+}

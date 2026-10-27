@@ -1,0 +1,55 @@
+{
+  "name": "hsb-screenshoot",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Cross-platform screen and window capture for DSH: monitors, regions, and window shots that work even when the window is behind others.",
+  "license": "MIT",
+  "author": "machine202502",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/machine202502/hsb-screenshoot.git"
+  },
+  "homepage": "https://github.com/machine202502/hsb-screenshoot#readme",
+  "bugs": {
+    "url": "https://github.com/machine202502/hsb-screenshoot/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "install.mjs",
+    "src/*.js",
+    "src/*.ps1",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "tests/*"
+  ],
+  "scripts": {
+    "test": "node tests/regression.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "bin": {
+    "hsb-screenshoot": "./install.mjs"
+  }
+}
