@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: 'hsb-screenshoot',
+  id: 'dsh-screenshoot',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
@@ -187,7 +187,7 @@ window.__ModuleLoader__.load({
               key,
             }, ShotRow));
           } catch (error) {
-            console.warn('hsb-screenshoot: toolview registration failed', error);
+            console.warn('dsh-screenshoot: toolview registration failed', error);
           }
         }
       },

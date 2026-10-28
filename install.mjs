@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * Install hsb-screenshoot into a DSH profile.
+ * Install dsh-screenshoot into a DSH profile.
  *
- *   npx --yes github:machine202502/hsb-screenshoot
+ *   npx --yes github:machine202502/dsh-screenshoot
  *   node install.mjs --profile desktop
  *   node install.mjs --uninstall
  */
@@ -11,8 +11,8 @@ import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-const PACKAGE = 'hsb-screenshoot';
-const SPEC = 'github:machine202502/hsb-screenshoot';
+const PACKAGE = 'dsh-screenshoot';
+const SPEC = 'github:machine202502/dsh-screenshoot';
 
 const argv = process.argv.slice(2);
 const flag = (name, fallback = null) => {
@@ -30,7 +30,7 @@ const profileDir = join(profilesRoot, profileName);
 const spec = flag('spec', SPEC);
 
 const fail = (message) => {
-  console.error(`hsb-screenshoot: ${message}`);
+  console.error(`dsh-screenshoot: ${message}`);
   process.exit(1);
 };
 
@@ -58,7 +58,7 @@ if (uninstall) {
   manifest.dsh.profile.bundles = bundles;
 }
 
-const backup = `${manifestPath}.bak-hsb-${Date.now()}`;
+const backup = `${manifestPath}.bak-dsh-${Date.now()}`;
 if (!dryRun) copyFileSync(manifestPath, backup);
 const next = `${JSON.stringify(manifest, null, 2)}\n`;
 if (dryRun) {

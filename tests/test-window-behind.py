@@ -1,6 +1,6 @@
 """Window that opens *behind* the current foreground window.
 
-Used to check that hsb-screenshoot captures a window by pid without bringing it
+Used to check that dsh-screenshoot captures a window by pid without bringing it
 to the front: the window is shown without activation and pushed to the bottom of
 the z-order.
 """
@@ -15,7 +15,7 @@ SWP_NOMOVE = 0x0002
 SWP_NOACTIVATE = 0x0010
 
 root = tk.Tk()
-root.title("HSB Background App")
+root.title("DSH Background App")
 width, height = 640, 420
 screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
 x = (screen_w - width) // 2

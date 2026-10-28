@@ -3,7 +3,7 @@ import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const out = join(tmpdir(), 'hsb-screenshoot-probe');
+const out = join(tmpdir(), 'dsh-screenshoot-probe');
 const check = (name, ok, detail = '') => console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? `  — ${detail}` : ''}`);
 
 const monitors = await listMonitors();

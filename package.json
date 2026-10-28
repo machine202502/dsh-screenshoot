@@ -1,5 +1,5 @@
 {
-  "name": "hsb-screenshoot",
+  "name": "dsh-screenshoot",
   "version": "0.1.0",
   "private": false,
   "type": "module",
@@ -8,11 +8,11 @@
   "author": "machine202502",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/machine202502/hsb-screenshoot.git"
+    "url": "git+https://github.com/machine202502/dsh-screenshoot.git"
   },
-  "homepage": "https://github.com/machine202502/hsb-screenshoot#readme",
+  "homepage": "https://github.com/machine202502/dsh-screenshoot#readme",
   "bugs": {
-    "url": "https://github.com/machine202502/hsb-screenshoot/issues"
+    "url": "https://github.com/machine202502/dsh-screenshoot/issues"
   },
   "engines": {
     "node": ">=20"
@@ -50,6 +50,6 @@
     }
   },
   "bin": {
-    "hsb-screenshoot": "./install.mjs"
+    "dsh-screenshoot": "./install.mjs"
   }
 }

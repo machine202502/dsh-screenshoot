@@ -1,4 +1,4 @@
-# hsb-screenshoot
+# dsh-screenshoot
 
 DSH-плагин для снимков экрана и окон. Кроссплатформенный: Windows, macOS, Linux (X11).
 
@@ -82,15 +82,15 @@ macOS отдаст только обои.
 ## Установка
 
 ```bash
-npx --yes github:machine202502/hsb-screenshoot
+npx --yes github:machine202502/dsh-screenshoot
 ```
 
 или вручную: добавить в `~/.dsh/profiles/desktop/package.json`
 
 ```json
 {
-  "dependencies": { "hsb-screenshoot": "github:machine202502/hsb-screenshoot" },
-  "dsh": { "profile": { "bundles": ["…", "hsb-screenshoot"] } }
+  "dependencies": { "dsh-screenshoot": "github:machine202502/dsh-screenshoot" },
+  "dsh": { "profile": { "bundles": ["…", "dsh-screenshoot"] } }
 }
 ```
 
@@ -103,7 +103,7 @@ screen_monitors
 → 0* 3200x2000 at 0,0
 
 screen_windows { title: "Brave" }
-→ 132518  pid 9800  3200x1904 at 0,0  machine202502/hsb-browser – Brave
+→ 132518  pid 9800  3200x1904 at 0,0  machine202502/dsh-browser – Brave
 
 screen_capture_window { title: "Brave" }
 → путь к PNG 3200x1904 (окно было за DSH)

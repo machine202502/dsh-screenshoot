@@ -1,4 +1,4 @@
-"""Small always-visible window for the hsb-screenshoot capture test.
+"""Small always-visible window for the dsh-screenshoot capture test.
 
 Opens a 700x460 window in the centre of the primary monitor and stays there,
 drawing a recognisable pattern so the screenshot is easy to verify.
@@ -6,7 +6,7 @@ drawing a recognisable pattern so the screenshot is easy to verify.
 import tkinter as tk
 
 root = tk.Tk()
-root.title("HSB Capture Test")
+root.title("DSH Capture Test")
 width, height = 700, 460
 screen_w, screen_h = root.winfo_screenwidth(), root.winfo_screenheight()
 x = (screen_w - width) // 2
@@ -14,7 +14,7 @@ y = (screen_h - height) // 2
 root.geometry(f"{width}x{height}+{x}+{y}")
 root.configure(bg="#101820")
 
-header = tk.Label(root, text="HSB Capture Test", font=("Segoe UI", 22, "bold"), fg="#f2f2f2", bg="#101820")
+header = tk.Label(root, text="DSH Capture Test", font=("Segoe UI", 22, "bold"), fg="#f2f2f2", bg="#101820")
 header.pack(pady=(28, 6))
 
 hint = tk.Label(root, text="this window is captured by pid", font=("Segoe UI", 12), fg="#9aa4b2", bg="#101820")

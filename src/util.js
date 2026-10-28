@@ -3,14 +3,14 @@ import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-/** Data directory per platform, matching the other hsb plugins. */
+/** Data directory per platform, matching the other dsh plugins. */
 export const dataHome = () =>
   process.env.LOCALAPPDATA ??
   (process.platform === 'darwin'
     ? join(homedir(), 'Library', 'Application Support')
     : process.env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'));
 
-export const defaultShotsDir = () => join(dataHome(), 'hsb-screenshoot', 'shots');
+export const defaultShotsDir = () => join(dataHome(), 'dsh-screenshoot', 'shots');
 
 export const ensureDir = (path) => {
   mkdirSync(path, { recursive: true });
