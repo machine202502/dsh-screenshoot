@@ -7,8 +7,12 @@ import { createServer } from 'node:http';
  * returns a `[shot:<id>]` marker; the tool row renders `<img src="…/shot/<id>">`.
  * Frames are kept in memory only for the newest entries — the files themselves
  * stay on disk and are not exposed.
+ *
+ * `route` lets the host half add its own endpoints (the settings API) to this
+ * same loopback bridge: it receives `(request, response, url)` and returns true
+ * when it has handled the request.
  */
-export function createFrameServer({ port = 49231, keep = 24 } = {}) {
+export function createFrameServer({ port = 49231, keep = 24, route = null } = {}) {
   const frames = new Map();
 
   const put = (buffer, meta = {}) => {
@@ -20,13 +24,24 @@ export function createFrameServer({ port = 49231, keep = 24 } = {}) {
 
   const sockets = new Set();
 
-  const server = createServer((req, res) => {
+  const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const cors = {
       'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'content-type',
+      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
       'Cache-Control': 'no-store',
     };
     if (req.method === 'OPTIONS') return res.writeHead(204, cors).end();
+
+    if (typeof route === 'function') {
+      try {
+        if (await route(req, res, url)) return undefined;
+      } catch {
+        if (!res.headersSent) res.writeHead(500, { ...cors, 'content-type': 'text/plain; charset=utf-8' });
+        return res.end('route failed');
+      }
+    }
 
     const [api, id] = url.pathname.split('/').filter(Boolean);
     if (api !== 'shot') return res.writeHead(404, cors).end();

@@ -1,91 +1,97 @@
 # dsh-screenshoot
 
-DSH-плагин для снимков экрана и окон. Кроссплатформенный: Windows, macOS, Linux (X11).
+A DSH plugin for screen and window captures. Cross-platform: Windows, macOS, Linux (X11).
 
-Главное отличие от обычного «скриншота экрана»: окно снимается **по своим пикселям**, поэтому
-снимок получается, даже если окно за другим окном, свёрнуто в фоне или не в фокусе. Кино на
-переднем плане и приложение агента за ним — не помеха.
+The main difference from an ordinary "screen screenshot": a window is captured **by its own
+pixels**, so the shot works even if the window is behind another window, minimized in the
+background or out of focus. A movie in the foreground and the agent's app behind it are not
+a problem.
 
-## Инструменты
+## Tools
 
-| Инструмент | Что делает |
+| Tool | What it does |
 |---|---|
-| `screen_monitors` | список мониторов: позиция, размер, масштаб, основность |
-| `screen_windows` | видимые окна: id, pid, заголовок, процесс, позиция, размер |
-| `screen_capture_monitor` | снимок целого монитора |
-| `screen_capture_region` | снимок прямоугольной области |
-| `screen_capture_window` | снимок окна по `pid`, `title` или `id` (десятичный или `0x…`) |
+| `screen_monitors` | list of monitors: position, size, scale, primary |
+| `screen_windows` | visible windows: id, pid, title, process, position, size |
+| `screen_capture_monitor` | capture of a whole monitor |
+| `screen_capture_region` | capture of a rectangular region |
+| `screen_capture_window` | capture of a window by `pid`, `title` or `id` (decimal or `0x…`) |
 
-Область обрезается по границам виртуального рабочего стола: если она выходит за экран,
-снимок делается по пересечению и в подписи появляется `clamped`, а если пересечения нет —
-возвращается понятная ошибка со размерами рабочего стола.
+A region is clipped to the virtual desktop bounds: if it goes beyond the screen, the shot is
+taken over the intersection and `clamped` appears in the caption, and if there is no
+intersection at all, a clear error with the desktop dimensions is returned.
 
-У всех трёх снимков есть `delayMs` — подождать перед съёмкой (до 30 с). Полезно, когда открывается
-меню, проигрывается анимация или окно ещё не перерисовалось.
+All three captures have `delayMs` — wait before the shot (up to 30 s). Useful when a menu
+opens, an animation is playing, or the window has not repainted yet.
 
-Все снимки сохраняются в PNG, путь возвращается в результате — его можно открыть
-инструментом `read_image`, чтобы посмотреть на картинку.
+All shots are saved as PNG and the path is returned in the result — it can be opened with the
+`read_image` tool to look at the picture.
 
-## Кусок окна
+## Window crop
 
-Окно можно снять не целиком, а вырезать прямоугольник относительно его верхнего левого угла:
+A window can be captured not whole but with a rectangle cut out relative to its top-left
+corner:
 
 ```text
 screen_capture_window { pid: 11184, crop: { x: 40, y: 60, width: 420, height: 240 } }
 → window 420×240 … · crop 420×240 at 40,60
 ```
 
-Координаты считаются от угла окна (верхняя левая точка содержимого), а не от экрана.
-Если прямоугольник выходит за пределы снимка, возвращается ошибка с размерами картинки —
-молча обрезать по краю не будем.
+Coordinates are counted from the window corner (the top-left point of the content), not from
+the screen. If the rectangle goes beyond the shot, an error with the picture dimensions is
+returned — we will not silently clip to the edge.
 
-Кроп работает на всех платформах: снимок делается платформенным способом, затем PNG
-обрезается встроенным декодером (`src/png.js`), без ImageMagick и без внешних зависимостей.
+Cropping works on every platform: the shot is taken the platform way, then the PNG is cropped
+by the built-in decoder (`src/png.js`), without ImageMagick and without external dependencies.
 
-## Снимки в чате
+## Shots in chat
 
-Как в Browser: после снимка в строке инструмента появляется миниатюра. Хост поднимает
-локальный сервер кадров на `127.0.0.1:49231`, инструмент возвращает маркер `[shot:<id>]`,
-а клиент рисует по нему `<img>`. В памяти держатся последние 24 кадра, файлы остаются на диске.
+Like in Browser: after a shot a thumbnail appears in the tool row. The host raises a local
+frame server on `127.0.0.1:49231`, the tool returns a `[shot:<id>]` marker, and the client
+renders an `<img>` from it. The last 24 frames are kept in memory; the files stay on disk.
 
-Клик по миниатюре открывает PNG в новой вкладке.
+Clicking a thumbnail opens the PNG in a new tab.
 
-## Как это работает по платформам
+## How it works per platform
 
 **Windows** — PowerShell + Win32:
 
-- `EnumWindows` + `DwmGetWindowAttribute` — список окон и точные границы;
-- `PrintWindow(PW_RENDERFULLCONTENT)` — отрисовка окна в bitmap, не копирование экрана;
-  именно поэтому снимается и перекрытое окно;
-- `Graphics.CopyFromScreen` — монитор и область;
-- per-monitor DPI awareness — координаты и размеры в физических пикселях (важно на 200 %).
-- Заголовки окон передаются в base64, а stdout принудительно UTF-8 — иначе кириллица ломается.
+- `EnumWindows` + `DwmGetWindowAttribute` — window list and exact bounds;
+- `PrintWindow(PW_RENDERFULLCONTENT)` — rendering the window into a bitmap instead of copying
+  the screen; that is exactly why an occluded window is captured;
+- `Graphics.CopyFromScreen` — monitor and region;
+- per-monitor DPI awareness — coordinates and sizes in physical pixels (important at 200 %).
+- Window titles are passed as base64, and stdout is forced to UTF-8 — otherwise Cyrillic breaks.
 
 **macOS** — `screencapture` + JavaScript for Automation:
 
-- `NSScreen` — мониторы;
-- `CGWindowListCopyWindowInfo` — окна и их границы;
-- `screencapture -l <window id>` — окно, даже перекрытое; `-R` — область; `-D` — монитор.
+- `NSScreen` — monitors;
+- `CGWindowListCopyWindowInfo` — windows and their bounds;
+- `screencapture -l <window id>` — a window, even an occluded one; `-R` — region; `-D` — monitor.
 
-Нужно разрешение **Screen Recording** (Системные настройки → Конфиденциальность). Без него
-macOS отдаст только обои.
+The **Screen Recording** permission is required (System Settings → Privacy). Without it macOS
+will only give the wallpaper.
 
 **Linux (X11)** — `xrandr`, `wmctrl`, ImageMagick `import`:
 
-- `xrandr --query` — мониторы;
-- `wmctrl -lGpx` — окна, pid и геометрия;
-- `import -window <id>` — окно из его собственного буфера; `-window root -crop` — область.
+- `xrandr --query` — monitors;
+- `wmctrl -lGpx` — windows, pid and geometry;
+- `import -window <id>` — the window from its own buffer; `-window root -crop` — region.
 
-На Wayland X11-инструменты не видят окна: плагин честно скажет, чего не хватает, вместо
-чёрного снимка. Для Wayland нужен portal/grim-подход.
+On Wayland the X11 tools do not see windows: the plugin will honestly say what is missing
+instead of a black shot. Wayland needs a portal/grim approach.
 
-## Установка
+## Screenshots
+
+![Plugin settings](docs/img/settings.jpg)
+
+## Installation
 
 ```bash
 npx --yes github:machine202502/dsh-screenshoot
 ```
 
-или вручную: добавить в `~/.dsh/profiles/desktop/package.json`
+or manually: add to `~/.dsh/profiles/desktop/package.json`
 
 ```json
 {
@@ -94,9 +100,21 @@ npx --yes github:machine202502/dsh-screenshoot
 }
 ```
 
-и перезапустить DSH. Плагин не тянет npm-зависимостей — только системные средства платформы.
+and restart DSH. The plugin pulls no npm dependencies — only the platform's system tools.
 
-## Примеры
+## Languages
+
+Interface languages: Russian, English, Chinese.
+
+The interface language comes from the `language` extension setting when it is `ru`, `en` or
+`zh`. The value `auto` follows the application language: `document.documentElement.lang`, then
+`navigator.language`; `ru*` → `ru`, `zh*` → `zh`, otherwise `en`. With no setting at all the
+default is `ru`.
+
+The setting is changed in the plugin form **Plugins → Screenshoot** and stored in the file
+`%LOCALAPPDATA%\dsh-screenshoot\settings.json`.
+
+## Examples
 
 ```text
 screen_monitors
@@ -106,24 +124,24 @@ screen_windows { title: "Brave" }
 → 132518  pid 9800  3200x1904 at 0,0  machine202502/dsh-browser – Brave
 
 screen_capture_window { title: "Brave" }
-→ путь к PNG 3200x1904 (окно было за DSH)
+→ path to PNG 3200x1904 (the window was behind DSH)
 
 screen_capture_region { x: 100, y: 100, width: 800, height: 500 }
 screen_capture_monitor { monitor: 0 }
 ```
 
-## Требования
+## Requirements
 
-| Платформа | Что нужно |
+| Platform | What is needed |
 |---|---|
-| Windows | PowerShell 5.1+ (есть по умолчанию), .NET Framework |
-| macOS | разрешение Screen Recording |
+| Windows | PowerShell 5.1+ (present by default), .NET Framework |
+| macOS | Screen Recording permission |
 | Linux X11 | `xrandr`, `wmctrl`, ImageMagick (`import`) |
-| Linux Wayland | `grim`, `wlr-randr` (только монитор/область) |
+| Linux Wayland | `grim`, `wlr-randr` (monitor/region only) |
 
-## Проверка
+## Testing
 
 ```bash
-node tests/probe.mjs   # бэкенд платформы напрямую
-node tests/smoke.mjs   # инструменты через index.js
+node tests/probe.mjs   # the platform backend directly
+node tests/smoke.mjs   # the tools through index.js
 ```

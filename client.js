@@ -21,10 +21,133 @@ window.__ModuleLoader__.load({
     const PORT = 49231;
     const base = `http://127.0.0.1:${PORT}`;
 
-    const TITLES = {
-      screen_capture_monitor: 'Screen monitor',
-      screen_capture_region: 'Screen region',
-      screen_capture_window: 'Screen window',
+    /** Language choices offered by the settings form; `auto` follows the app locale. */
+    const LANGUAGES = ['ru', 'en', 'zh', 'auto'];
+    const DEFAULT_LANGUAGE = 'ru';
+
+    const STRINGS = {
+      ru: {
+        tool: 'Инструмент',
+        in: 'ВХОД',
+        out: 'ВЫХОД',
+        close: 'Закрыть',
+        screenshot: 'Снимок экрана',
+        regionAt: '{width}×{height} в {x},{y}',
+        pid: 'pid {pid}',
+        settingsTitle: 'Язык',
+        settingsHint: 'Авто — по языку приложения',
+        save: 'Сохранить',
+        saved: 'Сохранено',
+        saveFailed: 'Не удалось сохранить',
+        loading: 'Загрузка…',
+        auto: 'Авто',
+        tools: {
+          screen_capture_monitor: 'Монитор',
+          screen_capture_region: 'Область экрана',
+          screen_capture_window: 'Окно',
+          capture: 'Снимок экрана',
+        },
+      },
+      en: {
+        tool: 'Tool',
+        in: 'IN',
+        out: 'OUT',
+        close: 'Close',
+        screenshot: 'Screenshot',
+        regionAt: '{width}×{height} at {x},{y}',
+        pid: 'pid {pid}',
+        settingsTitle: 'Language',
+        settingsHint: 'Auto follows the application language',
+        save: 'Save',
+        saved: 'Saved',
+        saveFailed: 'Could not save',
+        loading: 'Loading…',
+        auto: 'Auto',
+        tools: {
+          screen_capture_monitor: 'Screen monitor',
+          screen_capture_region: 'Screen region',
+          screen_capture_window: 'Screen window',
+          capture: 'Screen capture',
+        },
+      },
+      zh: {
+        tool: '工具',
+        in: '输入',
+        out: '输出',
+        close: '关闭',
+        screenshot: '截图',
+        regionAt: '{width}×{height}，位于 {x},{y}',
+        pid: '进程 {pid}',
+        settingsTitle: '语言',
+        settingsHint: '自动 — 跟随应用程序语言',
+        save: '保存',
+        saved: '已保存',
+        saveFailed: '保存失败',
+        loading: '加载中…',
+        auto: '自动',
+        tools: {
+          screen_capture_monitor: '显示器',
+          screen_capture_region: '屏幕区域',
+          screen_capture_window: '窗口',
+          capture: '屏幕截图',
+        },
+      },
+    };
+
+    /** Replace `{name}` placeholders in a localized template. */
+    const fill = (template, values) => String(template)
+      .replace(/\{(\w+)\}/g, (match, key) => (values[key] === undefined ? match : String(values[key])));
+
+    /** The language an unset preference follows: the application's own locale. */
+    const detectLanguage = () => {
+      const raw = String(
+        (typeof document === 'undefined' ? '' : document.documentElement?.lang)
+        || (typeof navigator === 'undefined' ? '' : navigator.language)
+        || 'en',
+      ).toLowerCase();
+      if (raw.startsWith('ru')) return 'ru';
+      if (raw.startsWith('zh')) return 'zh';
+      return 'en';
+    };
+
+    /**
+     * Saved `language` wins when it is a concrete language; `auto` follows the
+     * application locale; no setting at all falls back to the plugin default.
+     */
+    const resolveLanguage = (settings) => {
+      const preference = settings?.language;
+      if (preference === 'ru' || preference === 'en' || preference === 'zh') return preference;
+      if (preference === 'auto') return detectLanguage();
+      return DEFAULT_LANGUAGE;
+    };
+
+    /** The current interface language; rows and the settings form share it. */
+    let uiLanguage = DEFAULT_LANGUAGE;
+    const languageListeners = new Set();
+    const getLanguage = () => uiLanguage;
+    const setLanguage = (language) => {
+      if (!STRINGS[language] || language === uiLanguage) return;
+      uiLanguage = language;
+      for (const listener of languageListeners) listener();
+    };
+    const subscribeLanguage = (listener) => {
+      languageListeners.add(listener);
+      return () => languageListeners.delete(listener);
+    };
+    const useLanguage = () => React.useSyncExternalStore(subscribeLanguage, getLanguage, getLanguage);
+
+    /** Read the stored preference from the plugin bridge; ru until it answers. */
+    const loadLanguage = async () => {
+      try {
+        const response = await fetch(`${base}/state`, { cache: 'no-store' });
+        if (!response.ok) return uiLanguage;
+        const body = await response.json();
+        const language = resolveLanguage(body?.settings);
+        setLanguage(language);
+        return language;
+      } catch {
+        return uiLanguage;
+      }
     };
 
     // Same shapes the Browser plugin uses: a tool row (leading chevron, "Tool",
@@ -61,6 +184,17 @@ window.__ModuleLoader__.load({
 .bp-lightbox img { max-width: 92vw; max-height: 92vh; border-radius: 12px; background: #fff; box-shadow: 0 24px 64px rgba(0,0,0,.55); }
 .bp-lightbox-close { position: absolute; top: 18px; right: 22px; width: 34px; height: 34px; border-radius: 17px;
   border: none; cursor: pointer; font-size: 20px; line-height: 30px; color: #fff; background: rgba(255,255,255,.16); }
+.ss-set { display: flex; flex-direction: column; gap: 14px; max-width: 520px; padding: 4px 0 8px; font-size: 13px; }
+.ss-set-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.ss-set-hint { margin-top: 2px; font-size: 12px; color: var(--dsw-alias-label-tertiary, #8a8a8a); }
+.ss-set-select { height: 32px; padding: 0 10px; border: 1px solid var(--dsw-alias-border-l1, #dcdcdc); border-radius: 10px;
+  background: var(--dsw-alias-bg-base, #fff); color: inherit; font: inherit; outline: none; }
+.ss-set-actions { display: flex; align-items: center; gap: 12px; }
+.ss-set-save { height: 34px; padding: 0 16px; border: none; border-radius: 10px;
+  background: var(--dsw-alias-label-primary, #1f1f1f); color: var(--dsw-alias-bg-base, #fff); font: inherit; cursor: pointer; }
+.ss-set-save:disabled { opacity: .45; cursor: default; }
+.ss-set-status { font-size: 12px; color: var(--dsw-alias-label-tertiary, #8a8a8a); }
+.ss-set-status--error { color: #c0392b; }
 `;
       document.head.appendChild(tag);
     };
@@ -75,6 +209,8 @@ window.__ModuleLoader__.load({
 
     function ShotRow(props) {
       ensureStyles();
+      const language = useLanguage();
+      const strings = STRINGS[language];
       const block = props?.block;
       const { id, caption } = readFrame(block);
       const [expanded, setExpanded] = React.useState(false);
@@ -88,12 +224,14 @@ window.__ModuleLoader__.load({
       }, [open]);
 
       const name = block?.name ?? 'screen_capture';
-      const title = TITLES[name] ?? 'Screen capture';
+      const title = strings.tools[name] ?? strings.tools.capture;
       const args = block?.args && typeof block.args === 'object' ? block.args : {};
       const fromArgs = name === 'screen_capture_region'
-        ? (args.width && args.height ? `${args.width}×${args.height} at ${args.x},${args.y}` : '')
+        ? (args.width && args.height
+            ? fill(strings.regionAt, { width: args.width, height: args.height, x: args.x, y: args.y })
+            : '')
         : name === 'screen_capture_window'
-          ? (args.title ?? (args.pid ? `pid ${args.pid}` : ''))
+          ? (args.title ?? (args.pid ? fill(strings.pid, { pid: args.pid }) : ''))
           : '';
 
       // Header: the "tab" of the row, identical to Browser's tool rows.
@@ -108,7 +246,7 @@ window.__ModuleLoader__.load({
               ? h(ToolIcon, { size: 14 })
               : h('span', null, '>_'),
         ),
-        h('span', { className: 'bp-tool-name' }, 'Tool'),
+        h('span', { className: 'bp-tool-name' }, strings.tool),
         h('span', { className: 'bp-tool-sep' }),
         h('span', { className: 'bp-tool-args' }, caption || fromArgs || title),
       );
@@ -127,11 +265,11 @@ window.__ModuleLoader__.load({
             h('div', { className: 'bp-io-card' },
               inputText
                 ? h('div', { className: 'bp-io-section' },
-                    h('span', { className: 'bp-io-label' }, 'IN'),
+                    h('span', { className: 'bp-io-label' }, strings.in),
                     h('span', { className: 'bp-io-text' }, inputText))
                 : null,
               h('div', { className: 'bp-io-section' },
-                h('span', { className: 'bp-io-label' }, 'OUT'),
+                h('span', { className: 'bp-io-label' }, strings.out),
                 h('span', { className: 'bp-io-text' },
                   (Array.isArray(block?.content) ? block.content : [])
                     .filter((part) => part?.type === 'text')
@@ -146,11 +284,11 @@ window.__ModuleLoader__.load({
       const lightbox = open && createPortal
         ? createPortal(
             h('div', { className: 'bp-lightbox', onClick: () => setOpen(false) },
-              h('img', { src: full, alt: 'screenshot' }),
+              h('img', { src: full, alt: strings.screenshot }),
               h('button', {
                 className: 'bp-lightbox-close',
                 onClick: (event) => { event.stopPropagation(); setOpen(false); },
-                title: 'close',
+                title: strings.close,
               }, '×'),
             ),
             document.body,
@@ -177,9 +315,99 @@ window.__ModuleLoader__.load({
       );
     }
 
+    /** The `plugins.row.config` form: one language select and a save action. */
+    function ScreenshootSettings() {
+      ensureStyles();
+      const ui = useLanguage();
+      const strings = STRINGS[ui];
+      const [state, setState] = React.useState({ status: 'loading', values: {}, defaults: {} });
+      const [saving, setSaving] = React.useState(false);
+      const [notice, setNotice] = React.useState({ text: '', error: false });
+
+      React.useEffect(() => {
+        let alive = true;
+        fetch(`${base}/settings`, { cache: 'no-store' })
+          .then((response) => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+          })
+          .then((body) => {
+            if (!alive) return;
+            setState({ status: 'ready', values: body.values ?? {}, defaults: body.defaults ?? {} });
+            setLanguage(resolveLanguage(body.values));
+          })
+          .catch(() => {
+            if (alive) setState({ status: 'error', values: {}, defaults: {} });
+          });
+        return () => {
+          alive = false;
+        };
+      }, []);
+
+      const stored = state.values.language ?? state.defaults.language ?? DEFAULT_LANGUAGE;
+      const preference = LANGUAGES.includes(stored) ? stored : DEFAULT_LANGUAGE;
+
+      const save = async () => {
+        setSaving(true);
+        setNotice({ text: '', error: false });
+        try {
+          const response = await fetch(`${base}/settings`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ language: preference }),
+          });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          const body = await response.json();
+          const values = body.values ?? {};
+          const next = resolveLanguage(values);
+          setState({ status: 'ready', values, defaults: body.defaults ?? {} });
+          setLanguage(next);
+          setNotice({ text: STRINGS[next].saved, error: false });
+        } catch {
+          setNotice({ text: strings.saveFailed, error: true });
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      if (state.status === 'loading') {
+        return h('div', { className: 'ss-set' }, h('span', { className: 'ss-set-hint' }, strings.loading));
+      }
+
+      const options = [
+        ['ru', 'Русский'],
+        ['en', 'English'],
+        ['zh', '中文'],
+        ['auto', strings.auto],
+      ];
+
+      return h('div', { className: 'ss-set' },
+        h('div', { className: 'ss-set-row' },
+          h('div', null,
+            h('div', null, strings.settingsTitle),
+            h('div', { className: 'ss-set-hint' }, strings.settingsHint),
+          ),
+          h('select', {
+            className: 'ss-set-select',
+            value: preference,
+            onChange: (event) => setState((previous) => ({
+              ...previous,
+              values: { ...previous.values, language: event.target.value },
+            })),
+          }, options.map(([value, text]) => h('option', { key: value, value }, text))),
+        ),
+        h('div', { className: 'ss-set-actions' },
+          h('button', { type: 'button', className: 'ss-set-save', onClick: save, disabled: saving === true },
+            saving ? '…' : strings.save),
+          notice.text ? h('span', { className: `ss-set-status${notice.error ? ' ss-set-status--error' : ''}` }, notice.text) : null,
+        ),
+      );
+    }
+
     return {
       inject: ['slots'],
       apply(ctx) {
+        void loadLanguage();
         for (const key of ['screen_capture_monitor', 'screen_capture_region', 'screen_capture_window']) {
           try {
             ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({
@@ -189,6 +417,15 @@ window.__ModuleLoader__.load({
           } catch (error) {
             console.warn('dsh-screenshoot: toolview registration failed', error);
           }
+        }
+
+        try {
+          ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
+            name: 'plugins.row.config',
+            key: 'dsh-screenshoot#screenshoot',
+          }, () => h(ScreenshootSettings)));
+        } catch (error) {
+          console.warn('dsh-screenshoot: settings form registration failed', error);
         }
       },
     };

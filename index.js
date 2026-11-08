@@ -1,10 +1,91 @@
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { defaultShotsDir, ensureDir, stamp } from './src/util.js';
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { dataHome, defaultShotsDir, ensureDir, stamp } from './src/util.js';
 import { createFrameServer } from './src/frames.js';
 import { cropPng } from './src/png.js';
 
 export const inject = ['tools'];
+
+/** Language choices offered by the settings form; `auto` follows the app locale. */
+const LANGUAGES = ['ru', 'en', 'zh', 'auto'];
+const DEFAULT_SETTINGS = { language: 'ru' };
+
+/** Plugin settings live beside the shots folder: %LOCALAPPDATA%\dsh-screenshoot. */
+const STATE_DIR = join(dataHome(), 'dsh-screenshoot');
+const SETTINGS_FILE = join(STATE_DIR, 'settings.json');
+
+/** Read a JSON file, returning null instead of throwing on a missing or broken one. */
+const readJson = (file) => {
+  try {
+    return JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    return null;
+  }
+};
+
+/** Write JSON through a temporary file so a crash never leaves half a settings file. */
+const writeJson = (file, value) => {
+  mkdirSync(dirname(file), { recursive: true });
+  const temporary = `${file}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  renameSync(temporary, file);
+};
+
+/** Read the stored settings, falling back to the defaults on any damage. */
+const loadSettings = () => {
+  const stored = readJson(SETTINGS_FILE);
+  const language = LANGUAGES.includes(stored?.language) ? stored.language : DEFAULT_SETTINGS.language;
+  return { language };
+};
+
+/** Keep only a known language, so the file never carries a value the client ignores. */
+const saveSettings = (input) => {
+  const language = LANGUAGES.includes(input?.language) ? input.language : DEFAULT_SETTINGS.language;
+  const next = { language };
+  writeJson(SETTINGS_FILE, next);
+  return next;
+};
+
+/**
+ * Settings endpoints on the existing loopback bridge.
+ *
+ * GET  /state    — `{ settings }`, read by the client to pick the language;
+ * GET  /settings — `{ values, defaults, options }` for the config form;
+ * POST /settings — saves `{ language }` and returns the new values.
+ */
+const settingsRoute = async (request, response, url) => {
+  const path = url.pathname.replace(/\/+$/u, '');
+  const cors = {
+    'access-control-allow-origin': '*',
+    'access-control-allow-headers': 'content-type',
+    'access-control-allow-methods': 'GET,POST,OPTIONS',
+    'cache-control': 'no-store',
+  };
+  const json = (code, body) => {
+    response.writeHead(code, { ...cors, 'content-type': 'application/json; charset=utf-8' });
+    response.end(JSON.stringify(body));
+  };
+  if (path === '/state' && request.method === 'GET') {
+    json(200, { settings: loadSettings() });
+    return true;
+  }
+  if (path === '/settings' && request.method === 'GET') {
+    json(200, { values: loadSettings(), defaults: DEFAULT_SETTINGS, options: LANGUAGES });
+    return true;
+  }
+  if (path === '/settings' && request.method === 'POST') {
+    let body = '';
+    for await (const chunk of request) body += chunk;
+    try {
+      const parsed = JSON.parse(body || '{}');
+      json(200, { values: saveSettings(parsed), defaults: DEFAULT_SETTINGS });
+    } catch (error) {
+      json(400, { error: String(error?.message ?? error) });
+    }
+    return true;
+  }
+  return false;
+};
 
 const backends = {
   win32: () => import('./src/win32.js'),
@@ -38,7 +119,7 @@ const obj = (properties = {}, required = []) => ({
 
 export function apply(ctx, config = {}) {
   const outDir = config.outDir ?? defaultShotsDir();
-  const frames = createFrameServer({ port: config.bridgePort ?? 49231 });
+  const frames = createFrameServer({ port: config.bridgePort ?? 49231, route: settingsRoute });
 
   ctx.effect(() => {
     frames.listen().catch(() => {});

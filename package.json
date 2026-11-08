@@ -21,7 +21,8 @@
     ".": "./index.js",
     "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",
-    "./icon": "./icon.svg"
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
   },
   "files": [
     "index.js",
@@ -32,7 +33,9 @@
     "cordis.patch.yml",
     "locale/*.json",
     "icon.svg",
-    "tests/*"
+    "tests/*",
+    "README.ru.md",
+    "README.md"
   ],
   "scripts": {
     "test": "node tests/regression.mjs"
@@ -51,5 +54,6 @@
   },
   "bin": {
     "dsh-screenshoot": "./install.mjs"
-  }
+  },
+  "icon": "./icon.svg"
 }
