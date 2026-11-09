@@ -86,15 +86,15 @@ macOS отдаст только обои.
 ## Установка
 
 ```bash
-npx --yes github:machine202502/dsh-screenshoot
+dsh plugin --profile desktop add @machine202502/dsh-screenshoot
 ```
 
 или вручную: добавить в `~/.dsh/profiles/desktop/package.json`
 
 ```json
 {
-  "dependencies": { "dsh-screenshoot": "github:machine202502/dsh-screenshoot" },
-  "dsh": { "profile": { "bundles": ["…", "dsh-screenshoot"] } }
+  "dependencies": { "@machine202502/dsh-screenshoot": "^0.1.1" },
+  "dsh": { "profile": { "bundles": ["…", "@machine202502/dsh-screenshoot"] } }
 }
 ```
 

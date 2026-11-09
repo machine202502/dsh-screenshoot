@@ -1,5 +1,5 @@
 window.__ModuleLoader__.load({
-  id: 'dsh-screenshoot',
+  id: '@machine202502/dsh-screenshoot',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
