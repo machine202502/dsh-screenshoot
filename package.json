@@ -1,6 +1,6 @@
 {
   "name": "@machine202502/dsh-screenshoot",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Cross-platform screen and window capture for DSH: monitors, regions, and window shots that work even when the window is behind others.",
   "license": "MIT",

@@ -67,23 +67,28 @@ export async function listWindows({ pid, title } = {}) {
   return windows;
 }
 
-export async function captureMonitor({ index = 0, shot }) {
-  const result = await call('capture-monitor', ['-Monitor', String(index), '-Out', shot]);
+export async function captureMonitor({ index = 0, shot, cursor = false }) {
+  const extra = ['-Monitor', String(index), '-Out', shot];
+  if (cursor) extra.push('-Cursor');
+  const result = await call('capture-monitor', extra);
   return { shot: result.path ?? shot, ...result };
 }
 
-export async function captureRegion({ x, y, width, height, shot }) {
-  const result = await call('capture-region', [
+export async function captureRegion({ x, y, width, height, shot, cursor = false }) {
+  const extra = [
     '-X', String(x), '-Y', String(y), '-W', String(width), '-H', String(height), '-Out', shot,
-  ]);
+  ];
+  if (cursor) extra.push('-Cursor');
+  const result = await call('capture-region', extra);
   return { shot: result.path ?? shot, ...result };
 }
 
-export async function captureWindow({ pid, title, id, shot }) {
+export async function captureWindow({ pid, title, id, shot, cursor = false }) {
   const extra = ['-Out', shot];
   if (id) extra.push('-Hwnd', String(id));
   if (pid) extra.push('-ProcessId', String(pid));
   if (title) extra.push('-TitleBase64', Buffer.from(String(title), 'utf8').toString('base64'));
+  if (cursor) extra.push('-Cursor');
   const result = await call('capture-window', extra);
   return { shot: result.path ?? shot, ...result };
 }

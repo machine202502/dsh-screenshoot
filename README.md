@@ -24,6 +24,18 @@ intersection at all, a clear error with the desktop dimensions is returned.
 All three captures have `delayMs` — wait before the shot (up to 30 s). Useful when a menu
 opens, an animation is playing, or the window has not repainted yet.
 
+All three captures also take `cursor: true` — draw the mouse pointer into the shot. The default
+is off: a shot looks exactly like the screen behind the pointer. Turn it on when the pointer
+itself is the point (hover state, a drag, "this control here"), and leave it off when it would
+cover the text the agent has to read.
+
+| Platform | `cursor: true` |
+|---|---|
+| Windows | monitor, region and window — the live pointer shape is drawn at its screen position |
+| macOS | `screencapture -C`; the system may skip the pointer in a window shot |
+| Linux Wayland | `grim -c`, monitor and region |
+| Linux X11 | not possible with ImageMagick `import` — the tool returns a clear error, never a shot silently missing the pointer |
+
 All shots are saved as PNG and the path is returned in the result — it can be opened with the
 `read_image` tool to look at the picture.
 
@@ -60,6 +72,8 @@ Clicking a thumbnail opens the PNG in a new tab.
 - `PrintWindow(PW_RENDERFULLCONTENT)` — rendering the window into a bitmap instead of copying
   the screen; that is exactly why an occluded window is captured;
 - `Graphics.CopyFromScreen` — monitor and region;
+- `GetCursorInfo` + `DrawIconEx` — the live pointer for `cursor: true`, drawn at its screen
+  position with the shape's hotspot accounted for;
 - per-monitor DPI awareness — coordinates and sizes in physical pixels (important at 200 %).
 - Window titles are passed as base64, and stdout is forced to UTF-8 — otherwise Cyrillic breaks.
 
@@ -95,7 +109,7 @@ or manually: add to `~/.dsh/profiles/desktop/package.json`
 
 ```json
 {
-  "dependencies": { "@machine202502/dsh-screenshoot": "^0.1.1" },
+  "dependencies": { "@machine202502/dsh-screenshoot": "^0.1.2" },
   "dsh": { "profile": { "bundles": ["…", "@machine202502/dsh-screenshoot"] } }
 }
 ```

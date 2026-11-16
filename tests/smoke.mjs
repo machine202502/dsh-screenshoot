@@ -34,6 +34,9 @@ check('screen_capture_monitor', Boolean(monitor.path) && monitor.width > 0, `${m
 const region = await call('screen_capture_region', { x: 20, y: 20, width: 200, height: 120 });
 check('screen_capture_region', Boolean(region.path) && region.width === 200, `${region.width}x${region.height}`);
 
+const withCursor = await call('screen_capture_region', { x: 20, y: 20, width: 200, height: 120, cursor: true });
+check('cursor flag accepted', Boolean(withCursor.path) && withCursor.width === 200, `${withCursor.width}x${withCursor.height}`);
+
 const started = Date.now();
 const delayed = await call('screen_capture_region', { x: 5, y: 5, width: 120, height: 90, delayMs: 400 });
 const elapsed = Date.now() - started;

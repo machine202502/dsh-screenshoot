@@ -93,30 +93,41 @@ const importShot = async (args, shot) => {
   return { shot };
 };
 
-export async function captureMonitor({ index = 0, shot }) {
+/** ImageMagick `import` cannot draw the pointer; Wayland `grim -c` can. */
+const refuseCursor = (cursor) => {
+  if (cursor) {
+    throw new Error('the cursor is not supported on Linux X11 (ImageMagick `import` cannot draw it); on Wayland grim includes it');
+  }
+};
+
+export async function captureMonitor({ index = 0, shot, cursor = false }) {
   if (isWayland()) {
     await need('grim', 'install grim')();
     const monitors = await run('wlr-randr', ['--json'], { timeout: 10000 }).catch(() => '');
     void monitors;
-    await run('grim', [shot], { timeout: 30000 });
+    await run('grim', cursor ? ['-c', shot] : [shot], { timeout: 30000 });
     return { shot };
   }
+  refuseCursor(cursor);
   const monitors = await listMonitors();
   const monitor = monitors[index] ?? monitors[0];
   if (!monitor) throw new Error(`monitor ${index} not found`);
   return importShot(['-window', 'root', '-crop', `${monitor.width}x${monitor.height}+${monitor.x}+${monitor.y}`, '+repage'], shot);
 }
 
-export async function captureRegion({ x, y, width, height, shot }) {
+export async function captureRegion({ x, y, width, height, shot, cursor = false }) {
   if (isWayland()) {
     await need('grim', 'install grim')();
-    await run('grim', ['-g', `${x},${y} ${width}x${height}`, shot], { timeout: 30000 });
+    const geometry = `${x},${y} ${width}x${height}`;
+    await run('grim', cursor ? ['-c', '-g', geometry, shot] : ['-g', geometry, shot], { timeout: 30000 });
     return { shot };
   }
+  refuseCursor(cursor);
   return importShot(['-window', 'root', '-crop', `${width}x${height}+${x}+${y}`, '+repage'], shot);
 }
 
-export async function captureWindow({ pid, title, id, shot }) {
+export async function captureWindow({ pid, title, id, shot, cursor = false }) {
+  refuseCursor(cursor);
   let windowId = id;
   if (!windowId) {
     const matches = await listWindows({ pid, title });

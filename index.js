@@ -224,6 +224,7 @@ export function apply(ctx, config = {}) {
     parameters: obj({
       monitor: { type: 'number', description: 'Monitor index from screen_monitors (default 0)' },
       delayMs: { type: 'number', description: 'Wait this many milliseconds before the shot (max 30000)' },
+      cursor: { type: 'boolean', description: 'Draw the mouse pointer into the shot (default false)' },
       out: { type: 'string', description: 'Output PNG path; a timestamped file is used when omitted' },
     }),
     output: {
@@ -244,7 +245,7 @@ export function apply(ctx, config = {}) {
       const api = await backend();
       const shot = target(args.out);
       const waited = await settle(args.delayMs);
-      await api.captureMonitor({ index: Number(args.monitor ?? 0), shot });
+      await api.captureMonitor({ index: Number(args.monitor ?? 0), shot, cursor: args.cursor === true });
       const size = pngSize(shot);
       const label = `monitor ${args.monitor ?? 0} · ${size.width ?? '?'}×${size.height ?? '?'}${waited ? ` (+${waited} ms)` : ''}`;
       const frame = publish(shot, label).id;
@@ -261,6 +262,7 @@ export function apply(ctx, config = {}) {
       width: { type: 'number' },
       height: { type: 'number' },
       delayMs: { type: 'number', description: 'Wait this many milliseconds before the shot (max 30000)' },
+      cursor: { type: 'boolean', description: 'Draw the mouse pointer into the shot (default false)' },
       out: { type: 'string' },
     }, ['x', 'y', 'width', 'height']),
     output: {
@@ -313,7 +315,7 @@ export function apply(ctx, config = {}) {
       }
       const shot = target(args.out);
       const waited = await settle(args.delayMs);
-      await api.captureRegion({ x, y, width: keepWidth, height: keepHeight, shot });
+      await api.captureRegion({ x, y, width: keepWidth, height: keepHeight, shot, cursor: args.cursor === true });
       const size = pngSize(shot);
       const label = `region ${size.width ?? keepWidth}×${size.height ?? keepHeight} at ${x},${y}`
         + (clamped ? ' · clamped' : '')
@@ -331,6 +333,7 @@ export function apply(ctx, config = {}) {
       title: { type: 'string', description: 'Substring of the window title' },
       id: { type: 'string', description: 'Window handle from screen_windows (numeric or hex)' },
       delayMs: { type: 'number', description: 'Wait this many milliseconds before the shot (max 30000)' },
+      cursor: { type: 'boolean', description: 'Draw the mouse pointer into the shot (default false)' },
       crop: {
         type: 'object',
         additionalProperties: false,
@@ -372,7 +375,7 @@ export function apply(ctx, config = {}) {
       const api = await backend();
       const shot = target(args.out);
       const waited = await settle(args.delayMs);
-      const result = await api.captureWindow({ pid, title: args.title, id, shot });
+      const result = await api.captureWindow({ pid, title: args.title, id, shot, cursor: args.cursor === true });
       // Fetch the window record for the label: by pid/title, or by handle.
       let window = (pid || args.title) && !id
         ? (await api.listWindows({ pid, title: args.title }))[0]

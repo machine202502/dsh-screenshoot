@@ -7,6 +7,7 @@ param(
   [int]$H = 0,
   [int]$Monitor = 0,
   [int]$ProcessId = 0,
+  [switch]$Cursor,
   [string]$Title = "",
   [long]$Hwnd = 0,
   [string]$TitleBase64 = ""
@@ -54,6 +55,59 @@ public class HsbWin {
   [DllImport("user32.dll")] public static extern uint GetDpiForSystem();
   [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
   [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern bool GetCursorInfo(ref CURSORINFO info);
+  [DllImport("user32.dll")] public static extern bool GetIconInfo(IntPtr icon, out ICONINFO info);
+  [DllImport("user32.dll")] public static extern bool DrawIconEx(IntPtr hdc, int xLeft, int yTop, IntPtr hIcon, int cxWidth, int cyWidth, int istepIfAniCur, IntPtr hbrFlickerFreeDraw, int diFlags);
+  [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr handle);
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct CURSORINFO {
+    public int cbSize;
+    public int flags;
+    public IntPtr hCursor;
+    public POINT ptScreenPos;
+  }
+
+  [StructLayout(LayoutKind.Sequential)]
+  public struct ICONINFO {
+    public bool fIcon;
+    public int xHotspot;
+    public int yHotspot;
+    public IntPtr hbmMask;
+    public IntPtr hbmColor;
+  }
+
+  /** The pointer as the desktop shows it: position, shape and its hotspot. */
+  public class CursorState {
+    public bool visible;
+    public int x;
+    public int y;
+    public IntPtr handle;
+    public int hotX;
+    public int hotY;
+  }
+
+  public static CursorState GetCursor() {
+    var state = new CursorState();
+    var info = new CURSORINFO();
+    info.cbSize = Marshal.SizeOf(typeof(CURSORINFO));
+    if (!GetCursorInfo(ref info)) return state;
+    state.visible = (info.flags & 0x1) != 0; // CURSOR_SHOWING
+    state.x = info.ptScreenPos.X;
+    state.y = info.ptScreenPos.Y;
+    state.handle = info.hCursor;
+    if (state.handle != IntPtr.Zero) {
+      ICONINFO icon;
+      if (GetIconInfo(state.handle, out icon)) {
+        state.hotX = icon.xHotspot;
+        state.hotY = icon.yHotspot;
+        // GetIconInfo allocates both bitmaps; they are ours to release.
+        if (icon.hbmMask != IntPtr.Zero) DeleteObject(icon.hbmMask);
+        if (icon.hbmColor != IntPtr.Zero) DeleteObject(icon.hbmColor);
+      }
+    }
+    return state;
+  }
 
   /** Physical pixels everywhere: without this, a 200% display reports 1600x1000. */
   public static void EnsureDpi() {
@@ -143,11 +197,36 @@ function Save-Bitmap($bitmap, $path) {
   $bitmap.Dispose()
 }
 
+# Draw the live pointer into a bitmap whose top-left corner is ($left,$top) on
+# screen. $scale maps screen pixels to bitmap pixels: a window of a non-DPI-aware
+# process is rendered at its own 96 dpi, so its shot can be smaller than the frame.
+# DrawIconEx places the icon's top-left at (x,y), while the pointer position is the
+# hotspot, so the shape is offset by it. Returns $true when the cursor was drawn.
+function Add-Cursor($graphics, [int]$left, [int]$top, [int]$width, [int]$height, [double]$scale = 1.0) {
+  $state = [HsbWin]::GetCursor()
+  if (-not $state.visible) { return $false }
+  if ($state.handle -eq [IntPtr]::Zero) { return $false }
+  if ($state.x -lt $left -or $state.y -lt $top -or $state.x -ge ($left + $width) -or $state.y -ge ($top + $height)) {
+    return $false
+  }
+  $x = [int][math]::Round(($state.x - $left) * $scale) - [int][math]::Round($state.hotX * $scale)
+  $y = [int][math]::Round(($state.y - $top) * $scale) - [int][math]::Round($state.hotY * $scale)
+  $hdc = $graphics.GetHdc()
+  try {
+    # DI_NORMAL = 3 draws the mask and the colour image, like the desktop does.
+    $drawn = [HsbWin]::DrawIconEx($hdc, $x, $y, $state.handle, 0, 0, 0, [IntPtr]::Zero, 3)
+  } finally {
+    $graphics.ReleaseHdc($hdc)
+  }
+  return $drawn
+}
+
 function Capture-Rect([int]$left, [int]$top, [int]$width, [int]$height, $path) {
   if ($width -le 0 -or $height -le 0) { throw "region must be positive, got ${width}x${height}" }
   $bitmap = New-Object System.Drawing.Bitmap $width, $height
   $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
   $graphics.CopyFromScreen($left, $top, 0, 0, (New-Object System.Drawing.Size $width, $height), [System.Drawing.CopyPixelOperation]::SourceCopy)
+  if ($Cursor) { $null = Add-Cursor $graphics $left $top $width $height 1.0 }
   $graphics.Dispose()
   Save-Bitmap $bitmap $path
   return [ordered]@{ path = $path; x = $left; y = $top; width = $width; height = $height }
@@ -219,6 +298,11 @@ function Capture-Window([long]$handle, $path) {
   if ($total -gt 0 -and ($dark / $total) -ge 0.92) {
     $bitmap.Dispose()
     throw "window $handle captured as a black frame: the app blocks screen capture (DRM or protected content)"
+  }
+
+  if ($Cursor) {
+    $cursorGraphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    try { $null = Add-Cursor $cursorGraphics $rect.Left $rect.Top $width $height $scale } finally { $cursorGraphics.Dispose() }
   }
 
   Save-Bitmap $bitmap $path

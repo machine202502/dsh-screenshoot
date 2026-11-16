@@ -106,24 +106,27 @@ export async function listWindows({ pid, title } = {}) {
   return windows.sort((a, b) => b.width * b.height - a.width * a.height);
 }
 
-export async function captureMonitor({ index = 0, shot }) {
-  await run('screencapture', ['-x', '-D', String(index + 1), shot], { timeout: 30000 });
+/** `-C` draws the pointer; screencapture only honours it in non-interactive mode. */
+const cursorArgs = (cursor) => (cursor ? ['-C'] : []);
+
+export async function captureMonitor({ index = 0, shot, cursor = false }) {
+  await run('screencapture', ['-x', ...cursorArgs(cursor), '-D', String(index + 1), shot], { timeout: 30000 });
   return { shot };
 }
 
-export async function captureRegion({ x, y, width, height, shot }) {
-  await run('screencapture', ['-x', '-R', `${x},${y},${width},${height}`, shot], { timeout: 30000 });
+export async function captureRegion({ x, y, width, height, shot, cursor = false }) {
+  await run('screencapture', ['-x', ...cursorArgs(cursor), '-R', `${x},${y},${width},${height}`, shot], { timeout: 30000 });
   return { shot };
 }
 
-export async function captureWindow({ pid, title, id, shot }) {
+export async function captureWindow({ pid, title, id, shot, cursor = false }) {
   let windowId = id;
   if (!windowId) {
     const matches = await listWindows({ pid, title });
     if (!matches.length) throw new Error(`no window matched ${pid ? `pid ${pid}` : `title "${title}"`}`);
     windowId = matches[0].id;
   }
-  await run('screencapture', ['-x', '-o', '-l', String(windowId), shot], { timeout: 30000 });
+  await run('screencapture', ['-x', '-o', ...cursorArgs(cursor), '-l', String(windowId), shot], { timeout: 30000 });
   return { shot, windowId };
 }
 
