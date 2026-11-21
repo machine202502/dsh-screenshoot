@@ -18,7 +18,7 @@ window.__ModuleLoader__.load({
     try { createPortal = require('react-dom').createPortal; } catch { createPortal = null; }
 
     // Must match the frame server port in cordis.patch.yml.
-    const PORT = 49231;
+    const PORT = 38031;
     const base = `http://127.0.0.1:${PORT}`;
 
     /** Language choices offered by the settings form; `auto` follows the app locale. */

@@ -59,7 +59,7 @@ by the built-in decoder (`src/png.js`), without ImageMagick and without external
 ## Shots in chat
 
 Like in Browser: after a shot a thumbnail appears in the tool row. The host raises a local
-frame server on `127.0.0.1:49231`, the tool returns a `[shot:<id>]` marker, and the client
+frame server on `127.0.0.1:38031`, the tool returns a `[shot:<id>]` marker, and the client
 renders an `<img>` from it. The last 24 frames are kept in memory; the files stay on disk.
 
 Clicking a thumbnail opens the PNG in a new tab.

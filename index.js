@@ -119,7 +119,7 @@ const obj = (properties = {}, required = []) => ({
 
 export function apply(ctx, config = {}) {
   const outDir = config.outDir ?? defaultShotsDir();
-  const frames = createFrameServer({ port: config.bridgePort ?? 49231, route: settingsRoute });
+  const frames = createFrameServer({ port: config.bridgePort ?? 38031, route: settingsRoute });
 
   ctx.effect(() => {
     frames.listen().catch(() => {});
